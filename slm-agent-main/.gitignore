@@ -1,0 +1,11 @@
+# python artifacts
+__pycache__
+venv
+model
+
+# IDE
+.vscode
+
+# misc
+.local
+.env

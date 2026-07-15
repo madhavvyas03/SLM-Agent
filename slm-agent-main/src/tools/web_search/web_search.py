@@ -1,0 +1,92 @@
+"""
+web_search.py
+A minimal MCP "web_search" tool using the DDGS library.
+
+See: https://pypi.org/project/ddgs/
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Optional
+
+from ddgs import DDGS
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger("mcp_web_search")
+logging.basicConfig(level=logging.INFO)
+
+
+class WebSearchError(Exception):
+    """Custom exception for web search errors"""
+
+    pass
+
+
+class WebSearchInput(BaseModel):
+    query: str = Field(..., description="Search query string")
+    limit: int = Field(
+        5, ge=1, le=1000, description="Maximum number of results to return"
+    )
+
+
+class WebSearchResultItem(BaseModel):
+    title: str
+    snippet: str
+    url: str
+    source: Optional[str] = None
+    rank: int
+
+
+class WebSearchOutput(BaseModel):
+    query: str
+    results: list[WebSearchResultItem]
+
+
+class SearchBackend:
+    """Abstract backend interface for web search. Implement `search` for a provider."""
+
+    def search_text(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+    def search_images(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        raise NotImplementedError
+
+
+class DDGSBackend(SearchBackend):
+    def __init__(self):
+        self.search_engine = DDGS(verify=False, timeout=3)
+
+    def search_text(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        try:
+            return self.search_engine.text(query=query, max_results=limit)
+        except Exception as e:
+            return [{"message": "unexpected error occurred: " + str(e)}]
+
+    def search_images(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        try:
+            return self.search_engine.images(query, limit)
+        except Exception as e:
+            return [{"message": "unexpected error occurred: " + str(e)}]
+
+
+# Main tool handler function
+def run_web_search(input: dict, backend: SearchBackend) -> dict[str, Any]:
+    try:
+        payload = WebSearchInput(**input)
+    except Exception as e:
+        logger.exception("Invalid tool invocation")
+        raise
+
+    try:
+        items = backend.search_text(query=payload.query.strip(), limit=payload.limit)
+    except Exception as e:
+        logger.exception("Search backend error")
+        raise
+
+    out = WebSearchOutput(
+        query=payload.query.strip(),
+        results=[WebSearchResultItem(**item) for item in items],
+    )
+
+    return out.model_dump()

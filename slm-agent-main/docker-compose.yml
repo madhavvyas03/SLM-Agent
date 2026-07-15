@@ -1,0 +1,37 @@
+services:
+  agent:
+    build:
+      context: ./src/inference
+      dockerfile: Dockerfile
+    container_name: slm-agent
+    restart: unless-stopped
+    ports:
+      - "9191:9191"
+    networks:
+      - mcp-network
+
+  mcp-server:
+    build:
+      context: ./src/tools
+      dockerfile: Dockerfile
+    container_name: slm-mcp-server
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+      - HOST=0.0.0.0
+      - PORT=9000
+    volumes:
+      - ./src/tools/server.json:/app/server.json:ro
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+    name: mcp-network
+
+volumes:
+  mcp-server:
